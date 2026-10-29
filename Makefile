@@ -58,7 +58,7 @@ validate-release-package: ## Verify built packages contain the modern webui
 # a GitHub runner), so more workers than cores mostly buys duplicated collection:
 # `-n 16` on the 4-vCPU ubuntu-latest runner spent ~10 min collecting before the
 # first test ran. `auto` = one worker per CPU. Override: make test PYTEST_WORKERS=16
-PYTEST_WORKERS ?= auto
+PYTEST_WORKERS ?= logical
 
 test: ## Run tests
 	@# if SLOW is not set, pass `-m "not slow"` to skip slow tests

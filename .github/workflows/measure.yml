@@ -1,0 +1,138 @@
+name: Measure
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-no-api:
+    name: Test without API keys
+    runs-on: ubuntu-latest
+    # A hung xdist worker otherwise burns the 6h default (gptme/gptme#4009:
+    # TestTmuxRealTerminal::test_confirm_dialog_keys_work ran until cancel).
+    timeout-minutes: 45
+    env:
+      RELEASE: false
+      # Explicitly unset API keys to test without them
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      DEEPSEEK_API_KEY: ''
+      OPENROUTER_API_KEY: ''
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: 'recursive'
+    - name: Install apt dependencies
+      run: sudo apt-get update && sudo apt-get install -y universal-ctags pandoc tmux x11-xserver-utils xvfb xdotool scrot xterm fluxbox imagemagick
+
+    - name: Set up Xvfb
+      run: |
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        echo "DISPLAY=:99" >> $GITHUB_ENV
+
+    - uses: astral-sh/setup-uv@v7
+      with:
+        python-version: '3.12'
+
+    - name: Install dependencies
+      run: uv sync --all-extras --frozen
+
+    - name: Install playwright
+      run: uv run playwright install chromium
+
+    # Slow tests (browser, MCP, integration) run on master and dispatch only:
+    # they dominate this job's runtime, and PR CI waits on it.
+    - name: Run tests (without API keys; slow tests on master only)
+      env:
+        TERM: xterm
+        MODEL: local/test
+      run: make test
+
+    - name: Upload visual snapshot diffs on failure
+      if: failure()
+      uses: actions/upload-artifact@v7
+      with:
+        name: tui-visual-snapshot-diffs
+        path: tests/snapshots/*.actual.svg
+        if-no-files-found: ignore
+
+
+
+  # Minimal install test: no extras, tests the most common user installation config
+  test-minimal:
+    name: Test without API keys or extras
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE: false
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      DEEPSEEK_API_KEY: ''
+      OPENROUTER_API_KEY: ''
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: 'recursive'
+    - name: Install apt dependencies
+      run: sudo apt-get update && sudo apt-get install -y universal-ctags pandoc tmux x11-xserver-utils xvfb
+
+    - name: Set up Xvfb
+      run: |
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        echo "DISPLAY=:99" >> $GITHUB_ENV
+
+    - uses: astral-sh/setup-uv@v7
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies (no extras)
+      run: uv sync --frozen
+
+    # Python 3.11 spins under coverage after SetAsyncExc(..., NULL), even
+    # when clearing an empty slot. Keep every behavior test; collect coverage
+    # in the Python 3.12 full-install job instead.
+    - name: Run tests (no extras, fast only)
+      env:
+        TERM: xterm
+        MODEL: local/test
+      run: make test NO_COVERAGE=1
+
+
+  # Newest supported Python: the minimal install on 3.15, without coverage uploads.
+  test-py315:
+    name: Test on Python 3.15 without API keys or extras
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      RELEASE: false
+      OPENAI_API_KEY: ''
+      ANTHROPIC_API_KEY: ''
+      DEEPSEEK_API_KEY: ''
+      OPENROUTER_API_KEY: ''
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: 'recursive'
+    - name: Install apt dependencies
+      run: sudo apt-get update && sudo apt-get install -y universal-ctags pandoc tmux x11-xserver-utils xvfb
+
+    - name: Set up Xvfb
+      run: |
+        Xvfb :99 -screen 0 1024x768x24 > /dev/null 2>&1 &
+        echo "DISPLAY=:99" >> $GITHUB_ENV
+
+    - uses: astral-sh/setup-uv@v7
+      with:
+        python-version: '3.15'
+
+    - name: Install dependencies (no extras)
+      run: uv sync --frozen
+
+    - name: Run tests (no extras, fast only)
+      env:
+        TERM: xterm
+        MODEL: local/test
+      run: make test
+
+  # Windows smoke tests: a narrow, no-API slice covering the areas that actually
+  # bit users (filesystem paths, config loading, CLI entrypoints). Deliberately
+  # not a full matrix — a broad skip-marked suite would only buy fake confidence.

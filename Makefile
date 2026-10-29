@@ -57,8 +57,9 @@ validate-release-package: ## Verify built packages contain the modern webui
 # pytest-xdist workers. Every worker re-collects the whole suite (~90s of CPU on
 # a GitHub runner), so more workers than cores mostly buys duplicated collection:
 # `-n 16` on the 4-vCPU ubuntu-latest runner spent ~10 min collecting before the
-# first test ran. `auto` = one worker per CPU. Override: make test PYTEST_WORKERS=16
-PYTEST_WORKERS ?= auto
+# first test ran. `logical` = one worker per logical CPU (`auto` counts physical
+# cores, i.e. 2 on that runner). Override: make test PYTEST_WORKERS=16
+PYTEST_WORKERS ?= logical
 
 test: ## Run tests
 	@# if SLOW is not set, pass `-m "not slow"` to skip slow tests
